@@ -1,0 +1,57 @@
+#clock52 {
+		background: black;
+		width: 400px;
+		height: 400px;
+		font-family: 'Source Code Pro';
+		font-weight: bold;
+
+}
+
+
+/* minuut punten */
+#clock52 .minuutIndicator {
+		width: 10px;
+		height: 10px;
+		position: absolute;
+		/*color: white;*/
+		text-align: center;
+		line-height: 10px;
+}
+/*links boven*/
+#clock52 #LED-1 {
+		left: 20px;
+		top: 20px;
+}
+/*rechts boven*/
+#clock52 #LED-0 {
+		left: 385px;
+		top: 20px;
+}
+/*rechts onder*/
+ #clock52 #LED-123 {
+		left: 385px;
+		top: 385px;
+}
+/*links onder*/
+#clock52 #LED-124 {
+		left: 20px;
+		top: 385px;
+}
+
+#clock52 .LED { color: rgb(100,100,100); }
+
+#clock52 #clock52grid {
+		position: absolute;
+		text-align: center;
+		margin: 50px 50px 50px 50px;
+		width: 300px;
+		height: 300px;
+		font-family: 'Source Code Pro';
+		font-weight: bold;
+		/*color: white;*/
+}
+
+#uurTxt,#minuutTxt {
+		width: 50px;
+}
+

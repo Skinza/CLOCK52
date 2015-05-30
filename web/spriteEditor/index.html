@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>clock52 binary sprite array editor</title>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+	</head>
+	<script type="text/javascript">
+		$(document).ready(function(){
+			$("#updateGridBtn").click(function() {
+				drawNewGrid($('#sprite_width').val(),$('#sprite_height').val());
+			
+			});
+			drawNewGrid($('#sprite_width').val(),$('#sprite_height').val());
+		});
+
+		function drawNewGrid(width,height) {
+			console.log("width="+width+"/height="+height);
+			$("#binaryGrid").empty();
+			$("#binaryGrid").append("<table>");
+			for(row=0;row<height;row++) {
+				$("#binaryGrid").append("<tr>");
+				for(col=0; col<width;col++) {
+					$("#binaryGrid").append("<td><input type=\"checkbox\" id=\"checkbox_"+((row*width)+col)+"\" onclick=\"recalculateArray()\" /></td>");
+				}
+				$("#binaryGrid").append("</tr>");
+				
+			}
+			$("#binaryGrid").append("</table>");
+			recalculateArray();
+		}
+
+		function recalculateArray() {
+			console.log("test");
+			numpixels = parseInt($('#sprite_width').val()) * parseInt($('#sprite_height').val());
+			binaryStreamString = "";
+			for(pixel=0;pixel < numpixels;pixel++) {
+				binaryStreamString += $("#checkbox_"+pixel).is(":checked")?"1":"0";
+			}
+			byteArray = parseBinaryStreamString2reversedByteArray(binaryStreamString);
+			console.log(byteArray);
+			updateArrayData(parseInt($('#sprite_width').val()),parseInt($('#sprite_height').val()),byteArray);
+		}
+
+		function updateArrayData(width,height,byteArray) {
+			
+			c_str = "uint8_t sprite[] = { " + width + ", " + height + ", ";
+			for(i=0;i<byteArray.length;i++) {
+				c_str += byteArray[i];
+				if(i < byteArray.length -1) { c_str += ", "; } else {c_str += " "; } 
+			}
+			c_str += "};"
+			$("#arrayData").text(c_str);
+		}
+
+		function parseBinaryStreamString2reversedByteArray(inputString) {
+			inputBitArray = inputString.split("");
+			console.log(inputBitArray);
+			byteArray = new Array();
+			for(byteCount=0; byteCount < inputBitArray.length/8; byteCount++) {
+				console.log("bytecount = " + byteCount);
+				reversedBitString = 	
+					getBitString(inputBitArray,(byteCount*8)+7) +
+					getBitString(inputBitArray,(byteCount*8)+6) +
+					getBitString(inputBitArray,(byteCount*8)+5) +
+					getBitString(inputBitArray,(byteCount*8)+4) +
+					getBitString(inputBitArray,(byteCount*8)+3) +
+					getBitString(inputBitArray,(byteCount*8)+2) +
+					getBitString(inputBitArray,(byteCount*8)+1) +
+					getBitString(inputBitArray,(byteCount*8)+0);
+				
+				console.log(reversedBitString);
+				byteArray.push(parseInt(reversedBitString,2));
+				
+			}
+			return byteArray;
+		} 
+
+		function getBitString(inputBitArray,pos) {
+			if(pos >= inputBitArray.length) {
+				return "0";
+			} else { return inputBitArray[pos]; }
+		}
+		
+	</script>
+	<body>
+		width: <input id="sprite_width" type="text" value="4" /><br />
+		height: <input id="sprite_height" type="text" value="5" /><br />
+		<input type="button" value="update w/h" id="updateGridBtn" />
+		<div id="binaryGrid">binary grid display</div>
+		<span id="arrayData">uint8_t sprite[] = {w,h,bitdata}</span>
+	</body>
+</html>

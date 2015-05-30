@@ -1,26 +1,26 @@
 #include <FastLED.h> // leds
 #include <Wire.h> // rtc
 #include <RTClib.h> // rtc
-#include <OneWire.h> // digitale temp sensor
+#include <OneWire.h> // digitale temp sensor oneWire interface
+#include <DallasTemperature.h> // digitale temp sensor
 #include <PinChangeInt.h> // interrupt handler lib
 #include <CapacitiveSensor.h> // cap sensor lib
 // used constants
 #define NUMLEDS 125
-#define BRIGHTNESS 255 // this should be a variable controlled by a light sensor!
 
 //pin constants
-#define PIN_CAP1SND 12
-#define PIN_CAP1RCV 11
-#define PIN_CAP2SND 10
-#define PIN_CAP2RCV 9
-#define PIN_CAP3SND 8
-#define PIN_CAP3RCV 7
+#define PIN_CAP_RECHTS_SND 12
+#define PIN_CAP_RECHTS_RCV 11
+#define PIN_CAP_LINKS_SND 10
+#define PIN_CAP_LINKS_RCV 9
+#define PIN_CAP_ONDER_SND 8
+#define PIN_CAP_ONDER_RCV 7
 #define PIN_LEDS 5
 #define PIN_RST 4
-#define PIN_TMP_DIGI 3
+#define PIN_TMP_DIGI 6
 #define PIN_BTLED A0
-#define PIN_LIGHT A1
-#define PIN_TMP_ANALOG A2
+#define PIN_LIGHT A2
+#define PIN_TMP_ANALOG A1
 #define PIN_SCL A4
 #define PIN_SDA A5
 
@@ -70,8 +70,13 @@ RTC_DS1307 rtc;
 volatile boolean BTResetEnabled = true; // needs 2b volatile because of interrupt usage
 CRGB color = CRGB::White;
 uint8_t state = 0;
+uint8_t brightness = 255; // start @ full brightness
+CapacitiveSensor sensor_onder = CapacitiveSensor(PIN_CAP_ONDER_SND,PIN_CAP_ONDER_RCV);
+CapacitiveSensor sensor_links = CapacitiveSensor(PIN_CAP_LINKS_SND,PIN_CAP_LINKS_RCV);
+CapacitiveSensor sensor_rechts = CapacitiveSensor(PIN_CAP_RECHTS_SND,PIN_CAP_RECHTS_RCV);
 
-CapacitiveSensor sensor_onder = CapacitiveSensor(8,7);
+OneWire oneWireBus(PIN_TMP_DIGI);
+DallasTemperature sensor_tmp_digi(&oneWireBus);
 
 void setup() {
   // enable serial (both usb & bluetooth)
@@ -83,9 +88,10 @@ void setup() {
   
   // start fastled
   FastLED.addLeds<WS2812B,PIN_LEDS,GRB>(leds,NUMLEDS);
-  FastLED.setBrightness(BRIGHTNESS);
+  FastLED.setBrightness(brightness);
   // clear the leds by default
   clearLeds();
+  //FastLED.clear();
   FastLED.show();
   
    // begin RTC
@@ -94,42 +100,67 @@ void setup() {
    // if RTC is not running, set it to compile date. 
    if (! rtc.isrunning()) {
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  }
-  Serial.println(" SETUP DONE");
+   }
+   // begin onewire sensors (digi temp)
+   sensor_tmp_digi.begin();   
+   Serial.println(" SETUP DONE");
 }
 
 void clearLeds() {
   for(uint8_t i=0; i<NUMLEDS;i++) { // type can be uint8_t, strip is max 125 leds
+    //leds[i] = CRGB::Green;
+    //leds[i] = CRGB(0,100,0);
     leds[i] = CRGB::Black;
   }
 }
 
 void loop() {
+  // get available sensor data
   long sensor_onder_value = sensor_onder.capacitiveSensor(30);
+  long sensor_links_value = sensor_links.capacitiveSensor(30);
+  long sensor_rechts_value = sensor_rechts.capacitiveSensor(30);
+  int sensor_licht = analogRead(PIN_LIGHT);
+  //long sensor_digitemp = // todo
+  // is getting rtc time sensor data required every loop?
   DateTime now = rtc.now();
   uint8_t currentSecond = now.second();
+  
+  // adjust brightness
+  brightness = map(sensor_licht,0,1024,1,255);
+  FastLED.setBrightness(brightness);
   if(currentSecond != lastKnownSecond) {
     // second changed, update time
     
+    // get temp digi (due to timing required we do not run this every loop!
+    sensor_tmp_digi.requestTemperatures();
+    //float tmp_digi_value = sensor_tmp_digi.getTempCByIndex(0);
+    
     // print time on serial
-    Serial.print(now.day());Serial.print("/");
-    Serial.print(now.month());Serial.print("/");
-    Serial.print(now.year());Serial.print(" ");
-    Serial.print(now.hour());Serial.print(":");
-    Serial.print(now.minute());Serial.print(":");
+    Serial.print(now.day());Serial.print(F("/"));
+    Serial.print(now.month());Serial.print(F("/"));
+    Serial.print(now.year());Serial.print(F(" "));
+    Serial.print(now.hour());Serial.print(F(":"));
+    Serial.print(now.minute());Serial.print(F(":"));
     Serial.println(now.second());
-    Serial.print("sensor onder = "); Serial.println(sensor_onder_value);
+    Serial.print(F("sensor onder = ")); Serial.println(sensor_onder_value);
+    Serial.print(F("sensor links = ")); Serial.println(sensor_links_value);
+    Serial.print(F("sensor rechts = ")); Serial.println(sensor_rechts_value);
+    Serial.print(F("licht = ")); Serial.println(sensor_licht);
+    Serial.print(F("brightness = ")); Serial.println(brightness);
+    Serial.print(F("sensor digi tmp = ")); Serial.print(sensor_tmp_digi.getTempCByIndex(0)); Serial.println(F(" C"));
+    
   }
-  if(sensor_onder_value < 1500) {
+  //if(sensor_onder_value < 1500) {
     showDefaultClock(now);
-  } else  {
-    showSeconds(now);
-  }    
+  //} else  {
+  //  showSeconds(now);
+  //}    
   lastKnownSecond = currentSecond; 
 }
 
 void showSeconds(DateTime now) {
   clearLeds();
+  //FastLED.clear();
   uint8_t tiental = (now.second()-(now.second()%10))/10;
   sprite_ledPrint(leds,cijfers[tiental],0,0,CRGB::Yellow);
   sprite_ledPrint(leds,cijfers[now.second()-(10*tiental)],6,0,CRGB::HotPink);
@@ -139,7 +170,7 @@ void showSeconds(DateTime now) {
 void showDefaultClock(DateTime now) {
   // clear the drawing board ;)
     clearLeds();
-    
+    //FastLED.clear();
     // print "het is" by default
     sprite_ledPrint(leds,hetis,0,0,color);
     
@@ -211,6 +242,12 @@ void showDefaultClock(DateTime now) {
     if(modMinuut >=2) { leds[122] = color; }
     if(modMinuut >=1) { leds[121] = color; }
     
+    /*if(now.second()%2) {
+        sprite_ledPrint(leds,bir,0,0,CRGB::Yellow);
+    } else {
+      sprite_ledPrint(leds,bas,0,0,CRGB::Green);
+    }*/
+    
     // zet datum
     // zet most significant (10/20/30)
     uint8_t dagSign = floor(now.day()/10);
@@ -255,6 +292,7 @@ void sprite_ledPrint(CRGB *leds, const uint8_t *sprite,uint8_t offsetX,uint8_t o
   }
 }
 
+// get boolean for given x/y position from sprite pointer
 boolean sprite_getXY(uint8_t x, uint8_t y,const uint8_t *sprite) {
     uint16_t pixelOffset = ((y*sprite[0])+x);
     uint16_t byteOffset = pixelOffset/8;
@@ -262,6 +300,8 @@ boolean sprite_getXY(uint8_t x, uint8_t y,const uint8_t *sprite) {
     return bitRead(sprite[2 + byteOffset],bitOffset);
 }
 
+// we have the rows/cols hardcoded because clock does not change it dimensions on the fly. 
+// So please fix this if you have a larger/smaller matrix
 uint8_t XY(uint8_t x,uint8_t y) {
   uint8_t i;
   if( y & 0x01) {
@@ -272,6 +312,10 @@ uint8_t XY(uint8_t x,uint8_t y) {
     // Even rows run forwards
     i = (y * 11) + x;
   }
+  // led 0 is lower right corner
+  // led 120 is upper left corner
+  // 0,0 is upper left corner, zo we need to substract i from de number of leds (indexed 0)
+  // calc: rows*cols - 1 = 11*11 - 1 = 121 - 1 = 120 
   return 120-i;
 }
 

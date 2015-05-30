@@ -68,7 +68,8 @@ CRGB leds[NUMLEDS];
 uint8_t lastKnownSecond = 0;
 RTC_DS1307 rtc;
 volatile boolean BTResetEnabled = true; // needs 2b volatile because of interrupt usage
-CRGB color = CRGB::White;
+CRGB color = CRGB::Purple;
+uint8_t colorHue = 1;
 uint8_t state = 0;
 uint8_t brightness = 255; // start @ full brightness
 CapacitiveSensor sensor_onder = CapacitiveSensor(PIN_CAP_ONDER_SND,PIN_CAP_ONDER_RCV);
@@ -149,9 +150,13 @@ void loop() {
     Serial.print(F("brightness = ")); Serial.println(brightness);
     Serial.print(F("sensor digi tmp = ")); Serial.print(sensor_tmp_digi.getTempCByIndex(0)); Serial.println(F(" C"));
     
+    if(colorHue == 255) { colorHue=0; } else { colorHue++; }
+    color = CHSV(colorHue,255,255);
+    
   }
   //if(sensor_onder_value < 1500) {
     showDefaultClock(now);
+    
   //} else  {
   //  showSeconds(now);
   //}    
@@ -254,15 +259,21 @@ void showDefaultClock(DateTime now) {
     uint8_t dagEnkel = now.day()%10;
     
     switch(dagSign) {
-      case 1: leds[17] = CRGB::Red; break;
-      case 2: leds[18] = CRGB::Red; break;
+      case 1: leds[9] = CRGB::Red; break;
+      case 2: leds[8] = CRGB::Red; break;
       case 3: leds[10] = CRGB::Red; break;
     }
     // fix substraction 10 - 0 = wrong led, we shou
-    if(dagEnkel ==0) {
+    if(dagEnkel == 0) {
       leds[0] = CRGB::Red;
     } else {
-      leds[10-dagEnkel] = CRGB::Red;
+      if(dagEnkel == 1) {
+        leds[17] = CRGB::Red;
+      } else if(dagEnkel == 2) {
+        leds[18] = CRGB::Red;
+      } else { 
+        leds[10-dagEnkel] = CRGB::Red;
+      }
     }
     
     FastLED.show();

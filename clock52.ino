@@ -3,10 +3,12 @@
 #include <RTClib.h> // rtc
 #include <OneWire.h> // digitale temp sensor oneWire interface
 #include <DallasTemperature.h> // digitale temp sensor
-#include <PinChangeInt.h> // interrupt handler lib
+#include <PinChangeInterrupt.h> // interrupt handler lib
 #include <CapacitiveSensor.h> // cap sensor lib
 // used constants
 #define NUMLEDS 125
+#define MATRIX_WIDTH 11
+#define MATRIX_HEIGHT 11
 
 //pin constants
 #define PIN_CAP_RECHTS_SND 12
@@ -23,6 +25,8 @@
 #define PIN_TMP_ANALOG A1
 #define PIN_SCL A4
 #define PIN_SDA A5
+
+// compiler settings
 
 // clock52 sprites
 const uint8_t hetis[] = { 11, 11, 55, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -66,12 +70,15 @@ const uint8_t cijfers[][9] = {
 //global variables
 CRGB leds[NUMLEDS];
 uint8_t lastKnownSecond = 0;
-RTC_DS1307 rtc;
+
+RTC_DS3231 rtc;
+
 volatile boolean BTResetEnabled = true; // needs 2b volatile because of interrupt usage
 CRGB color = CRGB::Purple;
 uint8_t colorHue = 1;
 uint8_t state = 0;
 uint8_t brightness = 255; // start @ full brightness
+uint16_t secondStartMillis = 0; // used to calibrate ms to second and calculate ms resolution
 CapacitiveSensor sensor_onder = CapacitiveSensor(PIN_CAP_ONDER_SND,PIN_CAP_ONDER_RCV);
 CapacitiveSensor sensor_links = CapacitiveSensor(PIN_CAP_LINKS_SND,PIN_CAP_LINKS_RCV);
 CapacitiveSensor sensor_rechts = CapacitiveSensor(PIN_CAP_RECHTS_SND,PIN_CAP_RECHTS_RCV);
@@ -80,12 +87,16 @@ OneWire oneWireBus(PIN_TMP_DIGI);
 DallasTemperature sensor_tmp_digi(&oneWireBus);
 
 void setup() {
+  // start random color
+  randomSeed(analogRead(0));
+  colorHue = random(255);
   // enable serial (both usb & bluetooth)
   Serial.begin(57600); // BT always uses 57600
   
   //enable BT reset
   pinMode(PIN_RST,OUTPUT);
-  attachPinChangeInterrupt(PIN_BTLED,btConnectHandler,FALLING);
+  //pinMode(PIN_BTLED,INPUT_PULLUP);
+  attachPCINT(digitalPinToPCINT(PIN_BTLED),btConnectHandler,FALLING);
   
   // start fastled
   FastLED.addLeds<WS2812B,PIN_LEDS,GRB>(leds,NUMLEDS);
@@ -98,10 +109,7 @@ void setup() {
    // begin RTC
    Wire.begin();
    rtc.begin();
-   // if RTC is not running, set it to compile date. 
-   if (! rtc.isrunning()) {
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-   }
+   
    // begin onewire sensors (digi temp)
    sensor_tmp_digi.begin();   
    Serial.println(" SETUP DONE");
@@ -130,7 +138,8 @@ void loop() {
   brightness = map(sensor_licht,0,1024,1,255);
   FastLED.setBrightness(brightness);
   if(currentSecond != lastKnownSecond) {
-    // second changed, update time
+    // second changed, update ms
+    secondStartMillis = millis();
     
     // get temp digi (due to timing required we do not run this every loop!
     sensor_tmp_digi.requestTemperatures();
@@ -176,9 +185,27 @@ void showDefaultClock(DateTime now) {
   // clear the drawing board ;)
     clearLeds();
     //FastLED.clear();
+    // print minute progress bar
+    uint16_t stepsize = 60000/MATRIX_WIDTH;
+    uint16_t totalMillis = (((now.second()*1000)+(millis()-secondStartMillis)));
+    uint8_t fillLeds = (totalMillis/stepsize);
+    for(int i=0;i<MATRIX_WIDTH;i++) {
+      if(i<fillLeds) { 
+        leds[XY(i,10)] = CHSV(170,255,170);
+      } else if(i==fillLeds) { leds[XY(i,10)] = CHSV(170,255,map(totalMillis%stepsize,0,stepsize,0,170)); }
+      else { leds[XY(i,10)]=CHSV(0,0,0); }
+      
+      //Serial.print("|");
+      //Serial.print(secondenbar[i]);
+    }
+    //Serial.println("|");
+    
     // print "het is" by default
     sprite_ledPrint(leds,hetis,0,0,color);
-    
+
+    // print bas / bir
+    //sprite_ledPrint(leds,bas,0,0,CHSV(52,255,180));
+    //sprite_ledPrint(leds,bir,0,0,CHSV(52,255,180));
     
     uint8_t hour2print = now.hour();
     // if minute is greater then 20, we show the upcoming hour
@@ -332,6 +359,7 @@ uint8_t XY(uint8_t x,uint8_t y) {
 
 
 void btConnectHandler() {
+  Serial.print(F("Reset called"));
   if(BTResetEnabled) {
     digitalWrite(PIN_RST,HIGH);
   }
